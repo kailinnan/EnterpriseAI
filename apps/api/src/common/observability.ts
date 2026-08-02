@@ -19,6 +19,12 @@ const duration = new Histogram({
   buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60],
   registers: [metrics],
 });
+const errors = new Counter({
+  name: 'http_errors_total',
+  help: 'HTTP responses with status 4xx or 5xx',
+  labelNames: ['method', 'route', 'status'],
+  registers: [metrics],
+});
 export const modelLatency = new Histogram({
   name: 'model_latency_seconds',
   help: 'Model latency',
@@ -57,6 +63,7 @@ export class ObservabilityInterceptor implements NestInterceptor {
             status: String(res.statusCode),
           };
           requests.inc(labels);
+          if (res.statusCode >= 400) errors.inc(labels);
           duration.observe(labels, seconds);
           logger.info(
             {

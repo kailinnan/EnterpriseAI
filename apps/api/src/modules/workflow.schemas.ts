@@ -40,7 +40,14 @@ export const workflowNodeOutputSchemas: Record<string, z.ZodType> = {
   select_tool: z.object({ selectedTools: z.array(z.string()) }),
   execute_tool: z.object({ toolResults: z.array(z.record(z.string(), z.unknown())) }),
   safety_review: z.object({ safetyFlags: z.array(z.string()), draftAnswer: z.string() }),
-  generate_answer: z.object({ draftAnswer: z.string() }),
+  generate_answer: z.object({
+    draftAnswer: z.string(),
+    usage: z.object({
+      inputTokens: z.number().int().nonnegative(),
+      outputTokens: z.number().int().nonnegative(),
+      estimatedCost: z.number().nonnegative(),
+    }),
+  }),
   citation_validate: z.object({ citations: z.array(z.string()) }),
   persist_usage: z.object({
     usage: z.object({

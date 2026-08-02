@@ -11,6 +11,7 @@ const app = await NestFactory.create(AppModule, {
   cors: { origin: process.env.WEB_URL ?? 'http://localhost:3000', credentials: true },
   logger: false,
 });
+app.enableShutdownHooks();
 app.use(cookieParser());
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(json({ limit: '1mb' }));
@@ -23,4 +24,4 @@ const doc = SwaggerModule.createDocument(
   new DocumentBuilder().setTitle('Enterprise AI Hub').setVersion('1').addBearerAuth().build(),
 );
 SwaggerModule.setup('api/docs', app, doc);
-await app.listen(3001);
+await app.listen(Number(process.env.PORT ?? 3001));

@@ -125,6 +125,84 @@ export class ToolService {
         return { ticketId: String(row.id), status: String(row.status) };
       },
     });
+    this.registry.register({
+      name: 'get_product',
+      description: 'Get a product from the tenant product catalog by SKU',
+      inputSchema: z.object({ sku: z.string().min(1).max(100) }),
+      outputSchema: z.object({
+        product: z
+          .object({
+            sku: z.string(),
+            name: z.string(),
+            description: z.string(),
+            status: z.string(),
+          })
+          .nullable(),
+      }),
+      permissions: ['product:read'],
+      sideEffectLevel: 'none',
+      timeoutMs: 3000,
+      execute: async (ctx, input) => {
+        const [row] =
+          await db()`select sku,name,description,status from product_catalog where tenant_id=${ctx.tenantId} and sku=${input.sku}`;
+        return {
+          product: row
+            ? {
+                sku: String(row.sku),
+                name: String(row.name),
+                description: String(row.description),
+                status: String(row.status),
+              }
+            : null,
+        };
+      },
+    });
+    this.registry.register({
+      name: 'get_order_status',
+      description: 'Get the status of a tenant order by order number',
+      inputSchema: z.object({ orderNumber: z.string().min(1).max(100) }),
+      outputSchema: z.object({
+        order: z
+          .object({ orderNumber: z.string(), status: z.string(), summary: z.string() })
+          .nullable(),
+      }),
+      permissions: ['order:read'],
+      sideEffectLevel: 'none',
+      timeoutMs: 3000,
+      execute: async (ctx, input) => {
+        const [row] =
+          await db()`select order_number,status,summary from business_orders where tenant_id=${ctx.tenantId} and order_number=${input.orderNumber}`;
+        return {
+          order: row
+            ? {
+                orderNumber: String(row.order_number),
+                status: String(row.status),
+                summary: String(row.summary),
+              }
+            : null,
+        };
+      },
+    });
+    this.registry.register({
+      name: 'send_email',
+      description: 'Queue an outbound email after human approval',
+      inputSchema: z.object({
+        to: z.email(),
+        subject: z.string().min(1).max(200),
+        body: z.string().min(1).max(10000),
+        idempotencyKey: z.string().min(8).max(100),
+      }),
+      outputSchema: z.object({ emailId: z.string(), status: z.string() }),
+      permissions: ['email:write'],
+      sideEffectLevel: 'high',
+      timeoutMs: 5000,
+      execute: async (ctx, input) => {
+        const [row] =
+          await db()`insert into email_outbox(tenant_id,recipient,subject,body,idempotency_key,created_by) values(${ctx.tenantId},${input.to},${input.subject},${input.body},${input.idempotencyKey},${ctx.userId}) on conflict(tenant_id,idempotency_key) do update set subject=email_outbox.subject returning id,status`;
+        if (!row) throw new Error('EMAIL_QUEUE_FAILED');
+        return { emailId: String(row.id), status: String(row.status) };
+      },
+    });
   }
   async sync(tenantId: string) {
     for (const tool of this.registry.list())

@@ -1,0 +1,21 @@
+{$SITE_ADDRESS:localhost} {
+  encode zstd gzip
+
+  handle /api/* {
+    reverse_proxy api:3001 {
+      flush_interval -1
+      transport http {
+        dial_timeout 10s
+        response_header_timeout 120s
+      }
+    }
+  }
+
+  handle /health/* {
+    reverse_proxy api:3001
+  }
+
+  handle {
+    reverse_proxy web:3000
+  }
+}

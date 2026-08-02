@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   UploadedFile,
   UseInterceptors,
@@ -42,6 +43,34 @@ export class KnowledgeController {
   @Get('knowledge-bases/:id') one(@Param('id') x: string, @CurrentPrincipal() p: Principal) {
     return this.service.one(p, id(x));
   }
+  @RequireRoles('owner', 'admin', 'editor') @Patch('knowledge-bases/:id') update(
+    @Param('id') rawId: string,
+    @Body() body: unknown,
+    @CurrentPrincipal() p: Principal,
+  ) {
+    const input = z
+      .object({
+        name: z.string().min(1).optional(),
+        description: z.string().optional(),
+        embeddingModelConfigId: z.uuid().nullable().optional(),
+        chunkConfig: z
+          .object({
+            chunkTokens: z.number().int().min(100).max(4000),
+            overlapTokens: z.number().int().min(0).max(1000),
+            minChunkTokens: z.number().int().min(1).max(1000),
+          })
+          .optional(),
+      })
+      .refine((value) => Object.keys(value).length > 0)
+      .parse(body);
+    return this.service.update(p, id(rawId), input);
+  }
+  @RequireRoles('owner', 'admin', 'editor') @Delete('knowledge-bases/:id') removeKnowledgeBase(
+    @Param('id') rawId: string,
+    @CurrentPrincipal() p: Principal,
+  ) {
+    return this.service.removeKnowledgeBase(p, id(rawId));
+  }
   @RequireRoles('owner', 'admin', 'editor')
   @Post('knowledge-bases/:id/documents')
   @UseInterceptors(
@@ -65,6 +94,9 @@ export class KnowledgeController {
   }
   @Get('documents/:id/chunks') chunks(@Param('id') x: string, @CurrentPrincipal() p: Principal) {
     return this.service.chunks(p, id(x));
+  }
+  @Get('documents/:id') document(@Param('id') x: string, @CurrentPrincipal() p: Principal) {
+    return this.service.document(p, id(x));
   }
   @RequireRoles('owner', 'admin', 'editor') @Post('documents/:id/reindex') reindex(
     @Param('id') x: string,

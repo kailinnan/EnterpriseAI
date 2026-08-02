@@ -3,6 +3,11 @@ node_modules
 dist
 coverage
 .env
+.env.production
 *.log
 .turbo
 uploads
+detail.txt
+backups
+playwright-report
+test-results

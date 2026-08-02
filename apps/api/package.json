@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsc && node dist/apps/api/src/main.js",
+    "dev": "tsc && node --env-file=../../.env dist/apps/api/src/main.js",
     "build": "tsc",
-    "start": "node dist/apps/api/src/main.js",
+    "start": "node --env-file=../../.env dist/apps/api/src/main.js",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

@@ -24,7 +24,7 @@ describe('ToolRegistry', () => {
   it('hides stack details', () =>
     expect(structuredToolError(new Error('failed'))).toEqual({
       ok: false,
-      error: { code: 'TOOL_EXECUTION_FAILED', message: 'failed' },
+      error: { code: 'TOOL_EXECUTION_FAILED', message: 'Tool execution failed' },
     }));
   it('actively terminates a tool that exceeds its timeout', async () => {
     const registry = new ToolRegistry();

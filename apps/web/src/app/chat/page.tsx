@@ -86,7 +86,14 @@ export default function Page() {
   }
   return (
     <Shell>
-      <h1>知识库对话</h1>
+      <div className="page-heading">
+        <div>
+          <div className="eyebrow">Grounded Conversation</div>
+          <h1>知识库对话</h1>
+          <p>基于已授权资料生成回答，并由服务端验证每一条引用。</p>
+        </div>
+        <span className={busy ? 'status warning' : 'status'}>{busy ? '生成中' : '准备就绪'}</span>
+      </div>
       <div className="card row">
         <input
           value={conversation}
@@ -124,7 +131,7 @@ export default function Page() {
           </div>
         ))}
       </div>
-      <form className="row" onSubmit={submit}>
+      <form className="card row chat-composer" onSubmit={submit}>
         <input
           name="content"
           style={{ flex: 1 }}

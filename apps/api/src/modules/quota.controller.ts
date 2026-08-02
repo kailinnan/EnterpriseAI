@@ -14,7 +14,23 @@ export class QuotaController {
     const x = z
       .object({
         name: z.string().min(1).max(100),
-        scopes: z.array(z.enum(['agent:run', 'chat:write', 'knowledge:read', 'usage:read'])).min(1),
+        scopes: z
+          .array(
+            z.enum([
+              'agent:run',
+              'agent:read',
+              'chat:write',
+              'knowledge:read',
+              'usage:read',
+              'data:read',
+              'http:read',
+              'ticket:write',
+              'email:write',
+              'product:read',
+              'order:read',
+            ]),
+          )
+          .min(1),
         expiresAt: z.iso.datetime().optional(),
       })
       .parse(body);

@@ -9,6 +9,8 @@
     "typecheck": "turbo typecheck",
     "test": "turbo test",
     "test:integration": "powershell -ExecutionPolicy Bypass -File infra/scripts/verify-platform.ps1",
+    "test:rag": "powershell -ExecutionPolicy Bypass -File infra/scripts/verify-rag.ps1",
+    "test:e2e": "pnpm --filter @hub/web test:e2e",
     "db:migrate": "pnpm --filter @hub/db migrate",
     "db:seed": "pnpm --filter @hub/db seed"
   },

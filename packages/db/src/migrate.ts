@@ -9,4 +9,7 @@ await sql.file(
     '$1',
   ),
 );
+await sql.file(
+  new URL('../migrations/0003_completion.sql', import.meta.url).pathname.replace(/^\/(.:)/, '$1'),
+);
 await closeDb();

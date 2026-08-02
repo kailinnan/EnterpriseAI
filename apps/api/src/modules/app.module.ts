@@ -29,6 +29,7 @@ import { DataLifecycleController } from './data-lifecycle.controller.js';
 import { EvaluationService } from './evaluation.service.js';
 import { EvaluationController } from './evaluation.controller.js';
 import { ManagementController } from './management.controller.js';
+import { S3StorageAdapter } from './storage.adapter.js';
 @Module({
   imports: [JwtModule.register({})],
   controllers: [
@@ -59,6 +60,7 @@ import { ManagementController } from './management.controller.js';
     WorkflowService,
     QuotaService,
     EvaluationService,
+    S3StorageAdapter,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_GUARD, useClass: ScopesGuard },

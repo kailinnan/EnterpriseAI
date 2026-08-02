@@ -20,7 +20,14 @@ export default function Page() {
   }
   return (
     <Shell>
-      <h1>Agent 运行与 Trace</h1>
+      <div className="page-heading">
+        <div>
+          <div className="eyebrow">Controlled Agent Runtime</div>
+          <h1>Agent 运行与 Trace</h1>
+          <p>在步骤、时间、Token 和审批边界内执行企业工具。</p>
+        </div>
+        <span className="status">安全模式</span>
+      </div>
       <form className="card stack" onSubmit={run}>
         <textarea name="prompt" placeholder="任务" required />
         <select name="toolName">
@@ -31,6 +38,9 @@ export default function Page() {
           <option>readonly_query_template</option>
           <option>http_request_whitelist</option>
           <option>create_support_ticket</option>
+          <option>get_product</option>
+          <option>get_order_status</option>
+          <option>send_email</option>
         </select>
         <textarea
           name="toolInput"
@@ -38,7 +48,16 @@ export default function Page() {
         />
         <button>运行</button>
       </form>
-      {result !== undefined && <pre className="card">{JSON.stringify(result, null, 2)}</pre>}
+      {result !== undefined ? (
+        <section>
+          <h2>运行结果</h2>
+          <pre className="card">{JSON.stringify(result, null, 2)}</pre>
+        </section>
+      ) : (
+        <div className="empty-state">
+          <strong>准备运行 Agent</strong>输入任务并选择自动路由或指定一个受控工具。
+        </div>
+      )}
     </Shell>
   );
 }

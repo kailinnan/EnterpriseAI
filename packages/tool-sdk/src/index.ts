@@ -56,7 +56,7 @@ export class ToolRegistry {
   }
 }
 export const structuredToolError = (error: unknown) => ({
-  ok: false,
+  ok: false as const,
   error: {
     code:
       error instanceof z.ZodError
@@ -66,6 +66,13 @@ export const structuredToolError = (error: unknown) => ({
           : error instanceof Error && error.message === 'TOOL_OUTPUT_TOO_LARGE'
             ? 'TOOL_OUTPUT_TOO_LARGE'
             : 'TOOL_EXECUTION_FAILED',
-    message: error instanceof Error ? error.message : 'Unknown tool error',
+    message:
+      error instanceof z.ZodError
+        ? 'Tool input validation failed'
+        : error instanceof Error && error.name === 'AbortError'
+          ? 'Tool execution timed out'
+          : error instanceof Error && error.message === 'TOOL_OUTPUT_TOO_LARGE'
+            ? 'Tool output exceeded the configured limit'
+            : 'Tool execution failed',
   },
 });

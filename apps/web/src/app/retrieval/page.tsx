@@ -29,7 +29,14 @@ export default function Page() {
   }
   return (
     <Shell>
-      <h1>Hybrid Retrieval Debugger</h1>
+      <div className="page-heading">
+        <div>
+          <div className="eyebrow">Retrieval Lab</div>
+          <h1>Hybrid Retrieval Debugger</h1>
+          <p>对比语义向量、全文关键词和 RRF 融合排序结果。</p>
+        </div>
+        <span className="status neutral">PGVECTOR + FTS</span>
+      </div>
       <form className="card stack" onSubmit={submit}>
         <input name="ids" placeholder="知识库 UUID，多个用逗号分隔" required />
         <input name="query" placeholder="测试问题" required />
@@ -46,6 +53,11 @@ export default function Page() {
           <p>{x.content}</p>
         </div>
       ))}
+      {results.length === 0 && (
+        <div className="empty-state">
+          <strong>等待检索查询</strong>指定知识库并输入问题后，这里将展示召回分数和 Chunk 内容。
+        </div>
+      )}
     </Shell>
   );
 }

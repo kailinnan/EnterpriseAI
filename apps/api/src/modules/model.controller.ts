@@ -16,6 +16,12 @@ export class ModelController {
         baseUrl: z.url().optional(),
         apiKey: z.string().min(1).optional(),
       })
+      .superRefine((value, ctx) => {
+        if (value.providerType !== 'mock' && !value.apiKey)
+          ctx.addIssue({ code: 'custom', message: 'API_KEY_REQUIRED', path: ['apiKey'] });
+        if (value.providerType === 'openai-compatible' && !value.baseUrl)
+          ctx.addIssue({ code: 'custom', message: 'BASE_URL_REQUIRED', path: ['baseUrl'] });
+      })
       .parse(body);
     return this.service.createProvider(p, x);
   }
@@ -38,7 +44,8 @@ export class ModelController {
         modelName: z.string().min(1),
         inputPrice: z.number().nonnegative(),
         outputPrice: z.number().nonnegative(),
-        capabilities: z.array(z.string()),
+        capabilities: z.array(z.enum(['chat', 'embedding'])).min(1),
+        embeddingDimensions: z.number().int().positive().default(1536),
       })
       .parse(body);
     return this.service.addConfig(p, x);

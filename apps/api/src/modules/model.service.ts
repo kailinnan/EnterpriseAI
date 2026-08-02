@@ -2,12 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { db } from '@hub/db';
 import {
   MockProvider,
-  OpenAICompatibleProvider,
-  OpenAIProvider,
+  createProviderAdapter,
   type GenerateInput,
   type ModelProviderAdapter,
 } from '@hub/ai-core';
-import { decryptSecret, encryptSecret } from '../common/security.js';
+import { encryptSecret } from '../common/security.js';
 import type { Principal } from '../common/auth.js';
 import { modelLatency } from '../common/observability.js';
 type ConfigRow = {
@@ -49,10 +48,11 @@ export class ModelService {
       inputPrice: number;
       outputPrice: number;
       capabilities: string[];
+      embeddingDimensions?: number;
     },
   ) {
     const [row] =
-      await db()`insert into model_configs(tenant_id,provider_id,model_name,input_price,output_price,capability_json) select ${p.tenantId},id,${input.modelName},${input.inputPrice},${input.outputPrice},${db().json({ capabilities: input.capabilities })} from model_providers where tenant_id=${p.tenantId} and id=${input.providerId} returning *`;
+      await db()`insert into model_configs(tenant_id,provider_id,model_name,input_price,output_price,capability_json) select ${p.tenantId},id,${input.modelName},${input.inputPrice},${input.outputPrice},${db().json({ capabilities: input.capabilities, embeddingDimensions: input.embeddingDimensions ?? 1536 })} from model_providers where tenant_id=${p.tenantId} and id=${input.providerId} returning *`;
     if (!row) throw new NotFoundException({ code: 'PROVIDER_NOT_FOUND' });
     return row;
   }
@@ -68,6 +68,12 @@ export class ModelService {
     if (!row) throw new NotFoundException({ code: 'MODEL_NOT_FOUND' });
     const config = row as unknown as ConfigRow;
     return { adapter: this.makeAdapter(config), config };
+  }
+  async defaultFor(tenantId: string, capability: 'chat' | 'embedding' = 'chat') {
+    const [row] =
+      await db()`select mc.id from model_configs mc join model_providers mp on mp.id=mc.provider_id and mp.tenant_id=mc.tenant_id where mc.tenant_id=${tenantId} and mc.enabled and mp.enabled and coalesce(mc.capability_json->'capabilities','[]'::jsonb) ? ${capability} order by case when mp.provider_type='mock' then 1 else 0 end,mc.id limit 1`;
+    if (!row) throw new NotFoundException({ code: 'MODEL_NOT_CONFIGURED', capability });
+    return this.adapterFor(tenantId, String(row.id));
   }
   async test(p: Principal, providerId: string) {
     const [row] =
@@ -85,7 +91,9 @@ export class ModelService {
     const { adapter, config } = await this.adapterFor(p.tenantId, configId);
     const started = Date.now();
     const stopMetric = modelLatency.startTimer({ model: input.model });
-    const result = await adapter.generate(input).finally(stopMetric);
+    const result = await adapter
+      .generate({ ...input, model: config.model_name })
+      .finally(stopMetric);
     await this.usage(
       p,
       config,
@@ -97,6 +105,14 @@ export class ModelService {
       assistantId,
     );
     return result;
+  }
+  async embed(p: Principal, configId: string, texts: string[], traceId: string) {
+    const { adapter, config } = await this.adapterFor(p.tenantId, configId);
+    const started = Date.now();
+    const vectors = await adapter.embed(config.model_name, texts);
+    const embeddingTokens = Math.ceil(texts.join('').length / 4);
+    await this.usage(p, config, 0, 0, embeddingTokens, Date.now() - started, traceId);
+    return vectors;
   }
   async usage(
     p: Principal,
@@ -114,10 +130,10 @@ export class ModelService {
   }
   private makeAdapter(row: ConfigRow): ModelProviderAdapter {
     if (row.provider_type === 'mock') return new MockProvider();
-    if (!row.encrypted_api_key) throw new Error('PROVIDER_API_KEY_MISSING');
-    const key = decryptSecret(row.encrypted_api_key, String(process.env.MODEL_ENCRYPTION_KEY));
-    if (row.provider_type === 'openai') return new OpenAIProvider(key);
-    if (!row.base_url) throw new Error('PROVIDER_BASE_URL_MISSING');
-    return new OpenAICompatibleProvider({ baseUrl: row.base_url, apiKey: key });
+    return createProviderAdapter({
+      providerType: row.provider_type,
+      baseUrl: row.base_url,
+      encryptedApiKey: row.encrypted_api_key,
+    });
   }
 }

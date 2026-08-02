@@ -3,19 +3,14 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  OnModuleDestroy,
 } from '@nestjs/common';
-import {
-  S3Client,
-  CreateBucketCommand,
-  HeadBucketCommand,
-  PutObjectCommand,
-  DeleteObjectCommand,
-} from '@aws-sdk/client-s3';
 import { Queue } from 'bullmq';
 import { createHash, randomUUID } from 'node:crypto';
 import { db } from '@hub/db';
 import type { Principal } from '../common/auth.js';
 import { QuotaService } from './quota.service.js';
+import { S3StorageAdapter } from './storage.adapter.js';
 const allowed = new Map([
   ['.txt', ['text/plain']],
   ['.md', ['text/markdown', 'text/plain']],
@@ -24,27 +19,16 @@ const allowed = new Map([
   ['.html', ['text/html']],
 ]);
 @Injectable()
-export class KnowledgeService {
-  constructor(private readonly quota: QuotaService) {}
-  private readonly s3 = new S3Client({
-    endpoint: String(process.env.S3_ENDPOINT),
-    region: process.env.S3_REGION ?? 'us-east-1',
-    forcePathStyle: true,
-    credentials: {
-      accessKeyId: String(process.env.S3_ACCESS_KEY),
-      secretAccessKey: String(process.env.S3_SECRET_KEY),
-    },
-  });
+export class KnowledgeService implements OnModuleDestroy {
+  constructor(
+    private readonly quota: QuotaService,
+    private readonly storage: S3StorageAdapter,
+  ) {}
   private readonly queue = new Queue('documents', {
     connection: { url: String(process.env.REDIS_URL) },
   });
-  private readonly bucket = String(process.env.S3_BUCKET);
-  async ensureBucket() {
-    try {
-      await this.s3.send(new HeadBucketCommand({ Bucket: this.bucket }));
-    } catch {
-      await this.s3.send(new CreateBucketCommand({ Bucket: this.bucket }));
-    }
+  async onModuleDestroy() {
+    await this.queue.close();
   }
   async create(
     p: Principal,
@@ -56,6 +40,11 @@ export class KnowledgeService {
     },
   ) {
     await this.quota.assertResource(p.tenantId, 'knowledgeBaseCount');
+    if (input.embeddingModelConfigId) {
+      const [model] =
+        await db()`select id from model_configs where tenant_id=${p.tenantId} and id=${input.embeddingModelConfigId} and enabled and coalesce(capability_json->'capabilities','[]'::jsonb) ? 'embedding'`;
+      if (!model) throw new NotFoundException({ code: 'EMBEDDING_MODEL_NOT_FOUND' });
+    }
     const cfg = input.chunkConfig ?? { chunkTokens: 800, overlapTokens: 120, minChunkTokens: 80 };
     const [row] =
       await db()`insert into knowledge_bases(tenant_id,name,description,embedding_model_config_id,chunk_config_json) values(${p.tenantId},${input.name},${input.description},${input.embeddingModelConfigId ?? null},${db().json(cfg)}) returning *`;
@@ -67,6 +56,26 @@ export class KnowledgeService {
   async one(p: Principal, id: string) {
     const [row] =
       await db()`select * from knowledge_bases where tenant_id=${p.tenantId} and id=${id}`;
+    if (!row) throw new NotFoundException({ code: 'KNOWLEDGE_BASE_NOT_FOUND' });
+    return row;
+  }
+  async update(
+    p: Principal,
+    id: string,
+    input: {
+      name?: string;
+      description?: string;
+      embeddingModelConfigId?: string | null;
+      chunkConfig?: { chunkTokens: number; overlapTokens: number; minChunkTokens: number };
+    },
+  ) {
+    if (input.embeddingModelConfigId) {
+      const [model] =
+        await db()`select id from model_configs where tenant_id=${p.tenantId} and id=${input.embeddingModelConfigId} and enabled and coalesce(capability_json->'capabilities','[]'::jsonb) ? 'embedding'`;
+      if (!model) throw new NotFoundException({ code: 'MODEL_NOT_FOUND' });
+    }
+    const [row] =
+      await db()`update knowledge_bases set name=coalesce(${input.name ?? null},name),description=coalesce(${input.description ?? null},description),embedding_model_config_id=case when ${input.embeddingModelConfigId === null} then null else coalesce(${input.embeddingModelConfigId ?? null},embedding_model_config_id) end,chunk_config_json=coalesce(${input.chunkConfig ? db().json(input.chunkConfig) : null},chunk_config_json),updated_at=now() where tenant_id=${p.tenantId} and id=${id} returning *`;
     if (!row) throw new NotFoundException({ code: 'KNOWLEDGE_BASE_NOT_FOUND' });
     return row;
   }
@@ -86,15 +95,7 @@ export class KnowledgeService {
       throw new ConflictException({ code: 'DUPLICATE_DOCUMENT', documentId: duplicate[0]?.id });
     const documentId = randomUUID();
     const key = `${p.tenantId}/${kbId}/${documentId}/${encodeURIComponent(file.originalname)}`;
-    await this.ensureBucket();
-    await this.s3.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: file.buffer,
-        ContentType: file.mimetype,
-      }),
-    );
+    await this.storage.put(key, file.buffer, file.mimetype);
     await db()`insert into documents(id,tenant_id,knowledge_base_id,file_name,object_key,mime_type,file_size,sha256,created_by) values(${documentId},${p.tenantId},${kbId},${file.originalname},${key},${file.mimetype},${file.size},${sha},${p.userId})`;
     const job = await this.queue.add(
       'document.parse',
@@ -110,6 +111,12 @@ export class KnowledgeService {
   }
   documents(p: Principal, kbId: string) {
     return db()`select id,file_name,mime_type,file_size,parse_status,index_status,error_message,processing_metrics_json,created_at from documents where tenant_id=${p.tenantId} and knowledge_base_id=${kbId} order by created_at desc`;
+  }
+  async document(p: Principal, id: string) {
+    const [row] =
+      await db()`select id,knowledge_base_id,file_name,mime_type,file_size,sha256,parse_status,index_status,version,error_message,processing_metrics_json,created_at,updated_at from documents where tenant_id=${p.tenantId} and id=${id}`;
+    if (!row) throw new NotFoundException({ code: 'DOCUMENT_NOT_FOUND' });
+    return row;
   }
   async reindex(p: Principal, id: string) {
     const rows =
@@ -132,11 +139,20 @@ export class KnowledgeService {
   }
   async remove(p: Principal, id: string) {
     const [row] =
-      await db()`delete from documents where tenant_id=${p.tenantId} and id=${id} returning object_key`;
+      await db()`select object_key from documents where tenant_id=${p.tenantId} and id=${id}`;
     if (!row) throw new NotFoundException({ code: 'DOCUMENT_NOT_FOUND' });
-    await this.s3.send(
-      new DeleteObjectCommand({ Bucket: this.bucket, Key: String(row.object_key) }),
-    );
+    await this.storage.delete(String(row.object_key));
+    await db()`delete from documents where tenant_id=${p.tenantId} and id=${id}`;
+    return { ok: true };
+  }
+  async removeKnowledgeBase(p: Principal, id: string) {
+    const documents =
+      await db()`select object_key from documents where tenant_id=${p.tenantId} and knowledge_base_id=${id}`;
+    const [kb] =
+      await db()`select id from knowledge_bases where tenant_id=${p.tenantId} and id=${id}`;
+    if (!kb) throw new NotFoundException({ code: 'KNOWLEDGE_BASE_NOT_FOUND' });
+    for (const document of documents) await this.storage.delete(String(document.object_key));
+    await db()`delete from knowledge_bases where tenant_id=${p.tenantId} and id=${id}`;
     return { ok: true };
   }
 }

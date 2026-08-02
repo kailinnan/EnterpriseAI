@@ -3,9 +3,13 @@ import { db } from '@hub/db';
 import type { Principal } from '../common/auth.js';
 import { RetrievalService } from './retrieval.service.js';
 import { calculateEvaluationMetrics, type EvaluationObservation } from './evaluation.metrics.js';
+import { ModelService } from './model.service.js';
 @Injectable()
 export class EvaluationService {
-  constructor(private readonly retrieval: RetrievalService) {}
+  constructor(
+    private readonly retrieval: RetrievalService,
+    private readonly models: ModelService,
+  ) {}
   async create(
     p: Principal,
     name: string,
@@ -27,6 +31,7 @@ export class EvaluationService {
     const [run] =
       await db()`insert into evaluation_runs(tenant_id,dataset_id,status,trace_id) values(${p.tenantId},${datasetId},'running',${traceId}) returning id`;
     const observations: EvaluationObservation[] = [];
+    const model = await this.models.defaultFor(p.tenantId, 'chat');
     for (const c of cases) {
       const started = Date.now();
       const rows = await this.retrieval.search(p, {
@@ -34,10 +39,34 @@ export class EvaluationService {
         query: String(c.question),
         topK: 8,
       });
+      const generated = await this.models.generate(
+        p,
+        model.config.id,
+        {
+          model: model.config.model_name,
+          messages: [
+            {
+              role: 'system',
+              content: `只能依据以下资料回答；资料不足时明确说明：\n${rows.map((row) => row.content).join('\n')}`,
+            },
+            { role: 'user', content: String(c.question) },
+          ],
+          temperature: 0,
+          maxOutputTokens: 512,
+        },
+        traceId,
+      );
+      const estimatedCost =
+        (generated.usage.inputTokens / 1_000_000) * Number(model.config.input_price) +
+        (generated.usage.outputTokens / 1_000_000) * Number(model.config.output_price);
       observations.push({
         expectedDocumentIds: c.expected_document_ids as string[],
+        expectedAnswer: String(c.expected_answer),
         retrievedDocumentIds: rows.map((row) => row.documentId),
+        retrievedContents: rows.map((row) => row.content),
+        generatedAnswer: generated.text,
         latencyMs: Date.now() - started,
+        estimatedCost,
       });
     }
     const metrics = calculateEvaluationMetrics(observations);

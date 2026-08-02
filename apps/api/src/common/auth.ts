@@ -82,9 +82,9 @@ export class ScopesGuard implements CanActivate {
       ctx.getHandler(),
       ctx.getClass(),
     ]);
-    if (!required) return true;
     const p = ctx.switchToHttp().getRequest<AuthRequest>().principal;
     if (p?.authType !== 'api_key') return true;
+    if (!required) throw new ForbiddenException({ code: 'API_KEY_SCOPE_REQUIRED' });
     if (!required.every((scope) => p.scopes?.includes(scope)))
       throw new ForbiddenException({ code: 'API_KEY_SCOPE_FORBIDDEN' });
     return true;

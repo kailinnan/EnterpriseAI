@@ -36,6 +36,9 @@ export class AgentController {
             'http_request_whitelist',
             'readonly_query_template',
             'create_support_ticket',
+            'get_product',
+            'get_order_status',
+            'send_email',
           ])
           .optional(),
         toolInput: z.unknown().optional(),
@@ -65,6 +68,9 @@ export class AgentController {
             'http_request_whitelist',
             'readonly_query_template',
             'create_support_ticket',
+            'get_product',
+            'get_order_status',
+            'send_email',
           ])
           .optional(),
         toolInput: z.unknown().optional(),
@@ -91,11 +97,13 @@ export class AgentController {
     res.end();
   }
   @ApiOperation({ summary: '查询 Agent 运行及工具调用' })
+  @RequireScopes('agent:read')
   @Get('agent-runs/:id')
   get(@Param('id') raw: string, @CurrentPrincipal() p: Principal) {
     return this.agents.get(p, id(raw));
   }
   @ApiOperation({ summary: '通过 SSE 获取 Agent 运行快照' })
+  @RequireScopes('agent:read')
   @Get('agent-runs/:id/stream')
   async stream(@Param('id') raw: string, @CurrentPrincipal() p: Principal, @Res() res: Response) {
     res.setHeader('Content-Type', 'text/event-stream');

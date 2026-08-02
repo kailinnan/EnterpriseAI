@@ -1,4 +1,10 @@
-import { CanActivate, ConflictException, ExecutionContext, Injectable } from '@nestjs/common';
+import {
+  CanActivate,
+  ConflictException,
+  ExecutionContext,
+  Injectable,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { Redis } from 'ioredis';
 import { db } from '@hub/db';
@@ -13,11 +19,14 @@ type Limits = {
   assistantCount: number;
 };
 @Injectable()
-export class QuotaService {
+export class QuotaService implements OnModuleDestroy {
   private readonly redis = new Redis(String(process.env.REDIS_URL), {
     lazyConnect: true,
     maxRetriesPerRequest: 1,
   });
+  async onModuleDestroy() {
+    if (this.redis.status !== 'end') await this.redis.quit();
+  }
   private async limits(tenantId: string): Promise<Limits> {
     const [row] =
       await db()`select p.limits_json from tenant_subscriptions s join plans p on p.id=s.plan_id where s.tenant_id=${tenantId} and s.status='active' and (s.ends_at is null or s.ends_at>now())`;
@@ -30,7 +39,11 @@ export class QuotaService {
     const day = new Date().toISOString().slice(0, 10);
     const rateKey = `rate:${p.tenantId}:${p.apiKeyId ?? 'user:' + p.userId}:${day}`;
     const requests = await this.redis.incr(rateKey);
-    if (requests === 1) await this.redis.expire(rateKey, 90000);
+    if (requests === 1) {
+      const now = new Date();
+      const nextDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+      await this.redis.expire(rateKey, Math.max(1, Math.ceil((nextDay - now.getTime()) / 1000)));
+    }
     if (requests > limits.dailyRequests)
       throw new ConflictException({ code: 'QUOTA_DAILY_REQUESTS_EXCEEDED' });
     const [monthly] =
@@ -64,7 +77,7 @@ export class QuotaService {
   async assertConcurrent(tenantId: string) {
     const limits = await this.limits(tenantId);
     const [a] =
-      await db()`select (select count(*) from agent_runs where tenant_id=${tenantId} and status in('running','waiting_approval'))+(select count(*) from workflow_runs where tenant_id=${tenantId} and status in('running','waiting_approval')) used`;
+      await db()`select (select count(*) from agent_runs where tenant_id=${tenantId} and status='running')+(select count(*) from workflow_runs where tenant_id=${tenantId} and status='running') used`;
     if (Number(a?.used ?? 0) >= limits.concurrentRuns)
       throw new ConflictException({ code: 'QUOTA_CONCURRENT_RUNS_EXCEEDED' });
   }
