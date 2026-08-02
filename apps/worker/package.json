@@ -1,0 +1,30 @@
+{
+  "name": "@hub/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsc && node dist/apps/worker/src/main.js",
+    "build": "tsc",
+    "start": "node dist/apps/worker/src/main.js",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.864.0",
+    "@hub/ai-core": "workspace:*",
+    "@hub/db": "workspace:*",
+    "@hub/logger": "workspace:*",
+    "bullmq": "^5.58.5",
+    "cheerio": "^1.1.2",
+    "dotenv": "^17.4.2",
+    "ioredis": "^5.7.0",
+    "mammoth": "^1.10.0",
+    "pdfjs-dist": "^5.4.54"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5",
+    "vitest": "^3.2.4"
+  }
+}

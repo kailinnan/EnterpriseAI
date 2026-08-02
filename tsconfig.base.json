@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@hub/ai-core": ["packages/ai-core/src/index.ts"],
+      "@hub/config": ["packages/config/src/index.ts"],
+      "@hub/contracts": ["packages/contracts/src/index.ts"],
+      "@hub/db": ["packages/db/src/index.ts"],
+      "@hub/logger": ["packages/logger/src/index.ts"],
+      "@hub/tool-sdk": ["packages/tool-sdk/src/index.ts"]
+    }
+  }
+}

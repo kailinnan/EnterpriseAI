@@ -1,0 +1,23 @@
+{
+  "name": "@hub/db",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "migrate": "tsx src/migrate.ts",
+    "seed": "tsx src/seed.ts"
+  },
+  "dependencies": {
+    "argon2": "^0.44.0",
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5",
+    "vitest": "^3.2.4"
+  }
+}
