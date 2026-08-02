@@ -1,6 +1,6 @@
 # Enterprise AI Hub
 
-Enterprise AI Hub 是一个面向企业知识库和企业 Agent 场景的多租户平台。当前代码已经覆盖原分阶段方案的阶段 0 到阶段 12：认证与租户、模型网关、知识库入库、Hybrid RAG、流式问答、Agent 工具调用、人工审批、LangGraph 工作流、配额/API Key、评估可观测性，以及生产 Docker 部署。
+Enterprise AI Hub 是一个面向企业知识库和企业 Agent 场景的多租户平台。当前代码已经覆盖：认证与租户、模型网关、知识库入库、Hybrid RAG、流式问答、Agent 工具调用、人工审批、LangGraph 工作流、配额/API Key、评估可观测性，以及生产 Docker 部署。
 
 当前没有真实大模型 API Key 也可以运行。系统默认 seed 了 Mock 模型，用于完整验证入库、检索、问答、Agent 和工作流；后续有真实模型 Key 后，只需要在后台或 API 中配置 OpenAI/OpenAI-Compatible Provider 和模型配置，不需要改业务代码。
 
